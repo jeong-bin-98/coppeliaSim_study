@@ -13,6 +13,7 @@ class Coppeliasim_client:
         self.client_id = sim.simxStart('127.0.0.1', port, True, True, 5000, 5)
         self.joint_handles = []
         self.tcp_handle = None
+        self.target_handle = None
     
     def check_connection(self):
         if self.client_id != -1:
@@ -26,19 +27,24 @@ class Coppeliasim_client:
         # Joint와 TCP 핸들을 찾아서 클래스 변수에 저장
         self.joint_handles = []
         joint_names = [f"UR3_joint{i}" for i in range(1, 7)]
-
+        
         # Joint Handles
         for jname in joint_names:
             ret, handle = sim.simxGetObjectHandle(self.client_id, jname, simConst.simx_opmode_blocking)
             if ret == sim.simx_return_ok:
                 self.joint_handles.append(handle)
             else:
-                print(f"!! 핸들 찾기 실패: {jname}")
-        
+                    print(f"!! 핸들 찾기 실패: {jname}")
+            
         # TCP Handle
         ret, self.tcp_handle = sim.simxGetObjectHandle(self.client_id, "UR3_connection", simConst.simx_opmode_blocking)
         if ret != sim.simx_return_ok:
             print("!! TCP 핸들(UR3_connection) 찾기 실패")
+
+        # Target Handle
+        ret, self.target_handle = sim.simxGetObjectHandle(self.client_id, "Target", simConst.simx_opmode_blocking)
+        if ret != sim.simx_return_ok:
+            print("!! Target 핸들 찾기 실패")
 
     def start_streaming(self):
         """데이터 스트리밍 시작 (최초 1회 호출)"""
@@ -49,6 +55,10 @@ class Coppeliasim_client:
         # TCP 위치 스트리밍 등록 (World 기준: -1)
         if self.tcp_handle:
             sim.simxGetObjectPosition(self.client_id, self.tcp_handle, -1, simConst.simx_opmode_streaming)
+
+        # Target 위치 스트리밍 등록 (World 기준: -1)
+        if self.target_handle:
+            sim.simxGetObjectPosition(self.client_id, self.target_handle, -1, simConst.simx_opmode_streaming)
 
     def get_data_synchronized(self):
         """ 반환값: (joint_angles, tcp_position_world) """
@@ -68,10 +78,18 @@ class Coppeliasim_client:
             # World 기준(-1) 좌표 가져오기
             _, tcp_pos = sim.simxGetObjectPosition(self.client_id, self.tcp_handle, -1, simConst.simx_opmode_buffer)
 
+        target_pos = [tcp_pos[0], tcp_pos[1], tcp_pos[2]]
+        if self.target_handle:
+            # World 기준(-1) 좌표 가져오기
+            _, target_pos = sim.simxGetObjectPosition(self.client_id, self.target_handle, -1, simConst.simx_opmode_buffer)
+
         # 3. 통신 재개
         sim.simxPauseCommunication(self.client_id, False)
 
-        return angles, tcp_pos
+        return angles, tcp_pos, target_pos
+
+    def set_target_position(self, x, y, z):
+        sim.simxSetObjectPosition(self.client_id, self.target_handle, -1, [x, y, z], simConst.simx_opmode_oneshot)
 
     def stop_simulation(self):
         sim.simxStopSimulation(self.client_id, simConst.simx_opmode_blocking)
