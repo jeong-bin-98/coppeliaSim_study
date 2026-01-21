@@ -16,8 +16,8 @@ from socket_server import SocketServer
 load_dotenv()
 
 # 소켓 설정 (.env에서 로드)
-HOST = os.getenv('SOCKET_HOST', '127.0.0.1')
-PORT = int(os.getenv('SOCKET_PORT', 5555))
+HOST = os.getenv('SOCKET_HOST')
+PORT = int(os.getenv('SOCKET_PORT'))
 
 # 전역 변수
 current_target = np.array([0.0, 0.0, 0.0])  # 현재 타겟 위치 (보간 중)
@@ -72,6 +72,8 @@ def main():
 
     print(f"\n[설정] 보간 속도: {INTERPOLATION_SPEED} m/s")
     print("[안내] 다른 터미널에서 'python target_input.py' 실행하여 좌표 입력\n")
+    time.sleep(2)
+    
 
     try:
         while running:
