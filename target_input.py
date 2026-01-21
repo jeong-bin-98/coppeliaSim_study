@@ -2,10 +2,15 @@
 타겟 좌표 입력 클라이언트
 터미널에서 실행하여 좌표를 입력하면 inverseKinematics_sim.py로 전송
 """
+import os
 import socket
+from dotenv import load_dotenv
 
-HOST = '127.0.0.1'
-PORT = 5555
+load_dotenv()
+
+# 소켓 설정
+HOST = os.getenv('SOCKET_HOST')
+PORT = int(os.getenv('SOCKET_PORT'))
 
 def main():
     print("=" * 50)

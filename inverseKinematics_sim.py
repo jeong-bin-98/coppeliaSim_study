@@ -4,22 +4,20 @@ Inverse Kinematics 시뮬레이션 서버
 Path Interpolation으로 부드러운 타겟 이동
 """
 import os
-import math
 import time
-import threading
-import socket
 import numpy as np
 import sim
 import simConst
 from dotenv import load_dotenv
 
 from coppeliasim_client import Coppeliasim_client
+from socket_server import SocketServer
 
 load_dotenv()
 
-# 소켓 설정
-HOST = '127.0.0.1'
-PORT = 5555
+# 소켓 설정 (.env에서 로드)
+HOST = os.getenv('SOCKET_HOST', '127.0.0.1')
+PORT = int(os.getenv('SOCKET_PORT', 5555))
 
 # 전역 변수
 current_target = np.array([0.0, 0.0, 0.0])  # 현재 타겟 위치 (보간 중)
@@ -43,39 +41,6 @@ def lerp_target(current, goal, max_step):
     # 방향 벡터 정규화 후 max_step만큼 이동
     unit_dir = direction / distance
     return current + unit_dir * max_step
-
-def socket_server_thread():
-    """소켓 서버: 클라이언트로부터 좌표를 수신"""
-    global goal_target, running
-    
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind((HOST, PORT))
-    server.listen(1)
-    server.settimeout(1)
-    
-    print(f"[서버] 소켓 서버 시작 (포트: {PORT})")
-    
-    while running:
-        try:
-            conn, addr = server.accept()
-            with conn:
-                data = conn.recv(1024).decode().strip()
-                if data:
-                    coords = data.split()
-                    if len(coords) == 3:
-                        goal_target[0] = float(coords[0])
-                        goal_target[1] = float(coords[1])
-                        goal_target[2] = float(coords[2])
-                        print(f"\n[수신] 새 목표 좌표: ({goal_target[0]:.4f}, {goal_target[1]:.4f}, {goal_target[2]:.4f})")
-        except socket.timeout:
-            continue
-        except Exception as e:
-            if running:
-                print(f"[서버 오류] {e}")
-    
-    server.close()
-    print("[서버] 소켓 서버 종료")
 
 def main():
     global current_target, goal_target, running
@@ -101,9 +66,9 @@ def main():
     goal_target = np.array(tcp_pos)
     print(f"[초기화] 시작 위치: ({current_target[0]:.4f}, {current_target[1]:.4f}, {current_target[2]:.4f})")
 
-    # --- 소켓 서버 쓰레드 시작 ---
-    server_t = threading.Thread(target=socket_server_thread, daemon=True)
-    server_t.start()
+    # --- 소켓 서버 시작 ---
+    socket_server = SocketServer(HOST, PORT)
+    socket_server.start(goal_target)
 
     print(f"\n[설정] 보간 속도: {INTERPOLATION_SPEED} m/s")
     print("[안내] 다른 터미널에서 'python target_input.py' 실행하여 좌표 입력\n")
@@ -139,6 +104,7 @@ def main():
     
     finally:
         running = False
+        socket_server.stop()
         sim.simxStopSimulation(client.client_id, simConst.simx_opmode_blocking)
         sim.simxFinish(client.client_id)
         print(">> Remote API 연결 종료")
