@@ -1,19 +1,18 @@
 """
 소켓 서버 모듈
-L-V(Length-Value) 프로토콜로 클라이언트로부터 좌표를 수신하여 목표 타겟 위치를 업데이트
+클라이언트로부터 좌표를 수신하여 목표 타겟 위치를 업데이트
 """
 import socket
 import threading
 import os
 from dotenv import load_dotenv
-import struct
 
 load_dotenv()
 
 class SocketServer:
     """소켓 서버: 클라이언트로부터 좌표를 수신"""
     
-    def __init__(self, host=os.getenv('SOCKET_HOST'), port=int(os.getenv('SOCKET_PORT'))):
+    def __init__(self, host=os.getenv('SOCKET_HOST'), port=os.getenv('SOCKET_PORT')):
         self.host = host
         self.port = port
         self.running = False
@@ -24,6 +23,7 @@ class SocketServer:
     def start(self, goal_target):
         """
         소켓 서버 쓰레드 시작
+        
         Args:
             goal_target: 목표 좌표를 저장할 numpy array (참조로 업데이트됨)
         """
@@ -35,8 +35,6 @@ class SocketServer:
     def stop(self):
         """소켓 서버 종료"""
         self.running = False
-        if self.server:
-            self.server.close()  # 소켓 먼저 닫기
         if self.thread:
             self.thread.join(timeout=2)
         print("[서버] 소켓 서버 종료")
@@ -55,15 +53,9 @@ class SocketServer:
             try:
                 conn, addr = self.server.accept()
                 with conn:
-                    length_data = conn.recv(4)
-                    if not length_data:
-                        continue
-
-                    value_length = struct.unpack('I', length_data)[0]
-                    value_data = conn.recv(value_length)
-
-                    if value_data and len(value_data) == value_length:
-                        coords = struct.unpack('fff', value_data)
+                    data = conn.recv(1024).decode().strip()
+                    if data:
+                        coords = data.split()
                         if len(coords) == 3:
                             self._goal_target[0] = float(coords[0])
                             self._goal_target[1] = float(coords[1])

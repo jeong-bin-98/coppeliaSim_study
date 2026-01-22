@@ -1,7 +1,7 @@
 """
 Inverse Kinematics 시뮬레이션 서버
 소켓을 통해 target_input.py에서 좌표를 받아 시뮬레이션에 적용
-MoveTowards로 부드러운 타겟 이동
+Path Interpolation으로 부드러운 타겟 이동
 """
 import os
 import time
@@ -15,33 +15,35 @@ from socket_server import SocketServer
 
 load_dotenv()
 
-def move_towards_target(current, goal, max_step):
+# 소켓 설정 (.env에서 로드)
+HOST = os.getenv('SOCKET_HOST')
+PORT = int(os.getenv('SOCKET_PORT'))
+
+# 전역 변수
+current_target = np.array([0.0, 0.0, 0.0])  # 현재 타겟 위치 (보간 중)
+goal_target = np.array([0.0, 0.0, 0.0])     # 목표 타겟 위치 (사용자 입력)
+running = True
+
+# 보간 설정
+INTERPOLATION_SPEED = 0.5  # m/s (초당 이동 거리)
+LOOP_INTERVAL = 0.025      # 루프 주기 (초) - 40Hz (시뮬레이션 20Hz의 2배)
+
+def lerp_target(current, goal, max_step):
     """
-    MoveTowards: 현재 위치에서 목표로 max_step만큼 일정한 속도로 이동
+    Linear Interpolation: 현재 위치에서 목표로 max_step만큼 이동
     """
-    direction = goal - current  # 방향 벡터
-    distance = np.linalg.norm(direction)  # 남은 거리
+    direction = goal - current
+    distance = np.linalg.norm(direction)
     
     if distance <= max_step:
-        return goal.copy()  # 목표 도달
+        return goal.copy()  # 목표에 도달
     
     # 방향 벡터 정규화 후 max_step만큼 이동
-    unit_dir = direction / distance  # 단위 벡터 (방향만)
-    return current + unit_dir * max_step  # max_step만큼 이동
+    unit_dir = direction / distance
+    return current + unit_dir * max_step
 
 def main():
-    # 소켓 설정 (.env에서 로드)
-    HOST = os.getenv('SOCKET_HOST')
-    PORT = int(os.getenv('SOCKET_PORT'))
-    
-    # 이동 속도 설정
-    INTERPOLATION_SPEED = 0.5  # 0.5m/s (초당 이동 거리)
-    LOOP_INTERVAL = 0.025      # 루프 주기 (초) - 40Hz
-    
-    # 타겟 변수
-    current_target = np.array([0.0, 0.0, 0.0])  # 현재 타겟 위치 (이동 중)
-    goal_target = np.array([0.0, 0.0, 0.0])     # 목표 타겟 위치 (사용자 입력)
-    running = True
+    global current_target, goal_target, running
     
     # --- 1. Remote API 연결 ---
     client = Coppeliasim_client()
@@ -53,8 +55,9 @@ def main():
     # --- 3. 시뮬레이션 시작 ---
     sim.simxStartSimulation(client.client_id, simConst.simx_opmode_blocking)
     client.start_streaming()
-    print(">> Simulation Started")
-    
+
+    print(">> Simulation Started")  
+
     time.sleep(1)
 
     # --- 초기 TCP 위치로 타겟 좌표 설정 ---
@@ -67,18 +70,18 @@ def main():
     socket_server = SocketServer(HOST, PORT)
     socket_server.start(goal_target)
 
-    print(f"\n[설정] 이동 속도: {INTERPOLATION_SPEED} m/s")
+    print(f"\n[설정] 보간 속도: {INTERPOLATION_SPEED} m/s")
     print("[안내] 다른 터미널에서 'python target_input.py' 실행하여 좌표 입력\n")
     time.sleep(2)
     
 
     try:
         while running:
-            # --- 4. MoveTowards 적용 ---
+            # --- 4. Path Interpolation 적용 ---
             max_step = INTERPOLATION_SPEED * LOOP_INTERVAL
-            current_target = move_towards_target(current_target, goal_target, max_step)
+            current_target = lerp_target(current_target, goal_target, max_step)
             
-            # --- 5. Target 위치 설정 (이동된 좌표 사용) ---
+            # --- 5. Target 위치 설정 (보간된 좌표 사용) ---
             client.set_target_position(current_target[0], current_target[1], current_target[2])
             
             # --- 6. 데이터 가져오기 ---

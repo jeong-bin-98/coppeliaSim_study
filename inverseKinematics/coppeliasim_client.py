@@ -1,7 +1,3 @@
-"""
-CoppeliaSim Remote API 클라이언트 모듈
-시뮬레이터와의 연결, 핸들 초기화, 데이터 스트리밍을 담당
-"""
 import sim
 import simConst
 import os
@@ -65,7 +61,7 @@ class Coppeliasim_client:
             sim.simxGetObjectPosition(self.client_id, self.target_handle, -1, simConst.simx_opmode_streaming)
 
     def get_data_synchronized(self):
-        """반환값: (joint_angles, tcp_position, target_position)"""
+        """ 반환값: (joint_angles, tcp_position_world) """
         
         # 1. 통신 일시 정지 (스냅샷)
         sim.simxPauseCommunication(self.client_id, True)

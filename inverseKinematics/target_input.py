@@ -5,7 +5,6 @@
 import os
 import socket
 from dotenv import load_dotenv
-import struct
 
 load_dotenv()
 
@@ -18,12 +17,16 @@ def main():
     print("  타겟 좌표 입력 클라이언트")
     print("=" * 50)
     print("[사용법] x y z 형식으로 입력 (예: 0.3 0.2 0.4)")
-    print("[종료] Ctrl+C")
+    print("[종료] q 입력")
     print()
 
     while True:
         try:
             user_input = input(">> 좌표 입력: ").strip()
+            
+            if user_input.lower() == 'q':
+                print("종료합니다.")
+                break
             
             # 입력값 검증
             coords = user_input.split()
@@ -42,11 +45,8 @@ def main():
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     s.settimeout(2)
                     s.connect((HOST, PORT))
-                    # L-V(Length-Value) 프로토콜로 전송
-                    value_data = struct.pack('fff', x, y, z)   # Value: 좌표 데이터
-                    length_data = struct.pack('I', len(value_data))  # Length: 데이터 길이
-                    s.sendall(length_data + value_data)
-
+                    message = f"{x} {y} {z}"
+                    s.sendall(message.encode())
                     print(f"[전송 완료] ({x}, {y}, {z})")
             except ConnectionRefusedError:
                 print("[오류] 시뮬레이션 서버가 실행 중이 아닙니다.")
